@@ -10,11 +10,20 @@ enum Op {
     Div,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Theme {
+    Default,
+    Acrylic,
+    Blur,
+    FullTransparent,
+}
+
 struct Calculator {
     display: String,
     previous_value: Option<f64>,
     current_op: Option<Op>,
     new_input: bool,
+    theme: Theme,
 }
 
 impl Default for Calculator {
@@ -24,6 +33,7 @@ impl Default for Calculator {
             previous_value: None,
             current_op: None,
             new_input: true,
+            theme: Theme::Default,
         }
     }
 }
@@ -67,11 +77,51 @@ impl Calculator {
             self.new_input = true;
         }
     }
+
+    fn apply_theme_to_window(&self) {
+        unsafe {
+            use std::os::windows::ffi::OsStrExt;
+            use windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW;
+            use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
+            
+            let title: Vec<u16> = std::ffi::OsStr::new("Kalkulator").encode_wide().chain(std::iter::once(0)).collect();
+            let hwnd = FindWindowW(std::ptr::null(), title.as_ptr());
+            if hwnd != 0 {
+                let backdrop_type: i32 = match self.theme {
+                    Theme::Default => 1, // DWMSBT_NONE
+                    Theme::Acrylic => 3, // DWMSBT_TRANSIENTWINDOW (Acrylic)
+                    Theme::Blur => 2,    // DWMSBT_MAINWINDOW (Mica/Blur)
+                    Theme::FullTransparent => 1, // None, we will rely purely on alpha channel
+                };
+                
+                DwmSetWindowAttribute(
+                    hwnd,
+                    38, // DWMWA_SYSTEMBACKDROP_TYPE
+                    &backdrop_type as *const _ as *const _,
+                    std::mem::size_of::<i32>() as u32,
+                );
+            }
+        }
+    }
 }
 
 impl eframe::App for Calculator {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        ctx.set_visuals(egui::Visuals::dark());
+        let mut visuals = egui::Visuals::dark();
+        
+        // Sesuaikan transparansi background aplikasi eframe
+        match self.theme {
+            Theme::Default => {
+                visuals.panel_fill = egui::Color32::from_rgb(30, 30, 30);
+            }
+            Theme::Acrylic | Theme::Blur => {
+                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(0, 0, 0, 50);
+            }
+            Theme::FullTransparent => {
+                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(0, 0, 0, 0);
+            }
+        }
+        ctx.set_visuals(visuals);
 
         let total_size = ctx.screen_rect().size();
         
@@ -104,16 +154,20 @@ impl eframe::App for Calculator {
                         ui.style_mut().spacing.button_padding = egui::vec2(10.0, 8.0);
                         
                         if ui.button("Default").clicked() {
-                            
+                            self.theme = Theme::Default;
+                            self.apply_theme_to_window();
                         }
                         if ui.button("Acrylic Transparent").clicked() {
-                            
+                            self.theme = Theme::Acrylic;
+                            self.apply_theme_to_window();
                         }
                         if ui.button("Blur Transparent").clicked() {
-                            
+                            self.theme = Theme::Blur;
+                            self.apply_theme_to_window();
                         }
                         if ui.button("Full Transparent").clicked() {
-                            
+                            self.theme = Theme::FullTransparent;
+                            self.apply_theme_to_window();
                         }
                     });
                 });
@@ -211,7 +265,8 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([300.0, 480.0])
             .with_min_inner_size([200.0, 300.0])
-            .with_resizable(true), // Diatur true agar responsif
+            .with_resizable(true)
+            .with_transparent(true), // Harus true agar background bisa transparent/acrylic
         ..Default::default()
     };
     eframe::run_native(
