@@ -17,5 +17,16 @@ struct Calculator {
     new_input: bool,
 }
 
+impl Default for Calculator {
+    fn default() -> Self {
+        Self {
+            display: "0".to_owned(),
+            previous_value: None,
+            current_op: None,
+            new_input: true,
+        }
+    }
+}
+
 fn main() {
 }
