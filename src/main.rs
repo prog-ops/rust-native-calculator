@@ -34,7 +34,7 @@ impl Calculator {
             self.display = String::new();
             self.new_input = false;
         }
-
+        
         if self.display == "0" && digit != "." {
             self.display = digit.to_owned();
         } else {
@@ -73,77 +73,106 @@ impl eframe::App for Calculator {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.set_visuals(egui::Visuals::dark());
 
+        let total_size = ctx.screen_rect().size();
+        
+        // Menghitung proporsi font responsif
+        let display_font_size = (total_size.y * 0.08).clamp(24.0, 100.0);
+        let button_font_size = (total_size.y * 0.05).clamp(16.0, 60.0);
+
+        let mut style = (*ctx.style()).clone();
+        style.text_styles.insert(
+            egui::TextStyle::Heading,
+            egui::FontId::proportional(display_font_size),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Button,
+            egui::FontId::proportional(button_font_size),
+        );
+        ctx.set_style(style);
+
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Style the text
-            ui.style_mut().text_styles.insert(
-                egui::TextStyle::Heading,
-                egui::FontId::proportional(32.0),
-            );
-            ui.style_mut().text_styles.insert(
-                egui::TextStyle::Button,
-                egui::FontId::proportional(24.0),
-            );
+            // Kita bagi window jadi 25% area teks display dan 75% area tombol-tombol
+            let display_height = total_size.y * 0.25;
 
-            // Display
-            ui.vertical_centered_justified(|ui| {
-                ui.add_space(10.0);
-                ui.heading(&self.display);
-                ui.add_space(10.0);
-                ui.separator();
-                ui.add_space(5.0);
-            });
+            // Panel Atas untuk Teks Angka
+            egui::TopBottomPanel::top("display_panel")
+                .exact_height(display_height)
+                .frame(egui::Frame::none().inner_margin(egui::Margin::symmetric(16.0, 10.0)))
+                .show_inside(ui, |ui| {
+                    // Posisi kanan-bawah agar mirip layar kalkulator asli
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::BOTTOM), |ui| {
+                        ui.heading(&self.display);
+                    });
+                });
 
-            // Layout Buttons
-            let button_size = egui::vec2(50.0, 50.0);
+            ui.separator();
 
-            egui::Grid::new("calc_grid").spacing([10.0, 10.0]).show(ui, |ui| {
-                // Row 1
-                if ui.add_sized(button_size, egui::Button::new("7")).clicked() { self.input_digit("7"); }
-                if ui.add_sized(button_size, egui::Button::new("8")).clicked() { self.input_digit("8"); }
-                if ui.add_sized(button_size, egui::Button::new("9")).clicked() { self.input_digit("9"); }
-                if ui.add_sized(button_size, egui::Button::new("/")).clicked() { self.apply_op(Op::Div); }
-                ui.end_row();
+            // Panel Tengah untuk Tombol yang Flexibel
+            egui::CentralPanel::default()
+                .frame(egui::Frame::none().inner_margin(8.0))
+                .show_inside(ui, |ui| {
+                    let available = ui.available_size();
+                    let spacing = 8.0;
 
-                // Row 2
-                if ui.add_sized(button_size, egui::Button::new("4")).clicked() { self.input_digit("4"); }
-                if ui.add_sized(button_size, egui::Button::new("5")).clicked() { self.input_digit("5"); }
-                if ui.add_sized(button_size, egui::Button::new("6")).clicked() { self.input_digit("6"); }
-                if ui.add_sized(button_size, egui::Button::new("*")).clicked() { self.apply_op(Op::Mul); }
-                ui.end_row();
+                    // Mengkalkulasi tinggi dan lebar masing-masing tombol secara dinamis
+                    // karena kita memiliki 4 kolom dan 5 baris.
+                    let btn_w = (available.x - spacing * 3.0) / 4.0;
+                    let btn_h = (available.y - spacing * 4.0) / 5.0;
+                    let btn_size = egui::vec2(btn_w, btn_h);
 
-                // Row 3
-                if ui.add_sized(button_size, egui::Button::new("1")).clicked() { self.input_digit("1"); }
-                if ui.add_sized(button_size, egui::Button::new("2")).clicked() { self.input_digit("2"); }
-                if ui.add_sized(button_size, egui::Button::new("3")).clicked() { self.input_digit("3"); }
-                if ui.add_sized(button_size, egui::Button::new("-")).clicked() { self.apply_op(Op::Sub); }
-                ui.end_row();
+                    ui.spacing_mut().item_spacing = egui::vec2(spacing, spacing);
 
-                // Row 4
-                if ui.add_sized(button_size, egui::Button::new("C")).clicked() { *self = Default::default(); }
-                if ui.add_sized(button_size, egui::Button::new("0")).clicked() { self.input_digit("0"); }
-                if ui.add_sized(button_size, egui::Button::new(".")).clicked() {
-                    if !self.display.contains('.') {
-                        if self.new_input {
-                            self.display = "0".to_string();
-                            self.new_input = false;
+                    // Baris 1
+                    ui.horizontal(|ui| {
+                        if ui.add_sized(egui::vec2(btn_w * 3.0 + spacing * 2.0, btn_h), egui::Button::new("C")).clicked() { 
+                            *self = Default::default(); 
                         }
-                        self.input_digit(".");
-                    }
-                }
-                if ui.add_sized(button_size, egui::Button::new("+")).clicked() { self.apply_op(Op::Add); }
-                ui.end_row();
-            });
+                        if ui.add_sized(btn_size, egui::Button::new("/")).clicked() { self.apply_op(Op::Div); }
+                    });
 
-            ui.add_space(10.0);
+                    // Baris 2
+                    ui.horizontal(|ui| {
+                        if ui.add_sized(btn_size, egui::Button::new("7")).clicked() { self.input_digit("7"); }
+                        if ui.add_sized(btn_size, egui::Button::new("8")).clicked() { self.input_digit("8"); }
+                        if ui.add_sized(btn_size, egui::Button::new("9")).clicked() { self.input_digit("9"); }
+                        if ui.add_sized(btn_size, egui::Button::new("*")).clicked() { self.apply_op(Op::Mul); }
+                    });
 
-            // Put Equal button spanning 200 units width and 50 units height
-            ui.vertical_centered_justified(|ui| {
-                if ui.add_sized(egui::vec2(230.0, 50.0), egui::Button::new("=")).clicked() {
-                    self.calculate();
-                    self.current_op = None;
-                    self.new_input = true;
-                }
-            });
+                    // Baris 3
+                    ui.horizontal(|ui| {
+                        if ui.add_sized(btn_size, egui::Button::new("4")).clicked() { self.input_digit("4"); }
+                        if ui.add_sized(btn_size, egui::Button::new("5")).clicked() { self.input_digit("5"); }
+                        if ui.add_sized(btn_size, egui::Button::new("6")).clicked() { self.input_digit("6"); }
+                        if ui.add_sized(btn_size, egui::Button::new("-")).clicked() { self.apply_op(Op::Sub); }
+                    });
+
+                    // Baris 4
+                    ui.horizontal(|ui| {
+                        if ui.add_sized(btn_size, egui::Button::new("1")).clicked() { self.input_digit("1"); }
+                        if ui.add_sized(btn_size, egui::Button::new("2")).clicked() { self.input_digit("2"); }
+                        if ui.add_sized(btn_size, egui::Button::new("3")).clicked() { self.input_digit("3"); }
+                        if ui.add_sized(btn_size, egui::Button::new("+")).clicked() { self.apply_op(Op::Add); }
+                    });
+
+                    // Baris 5
+                    ui.horizontal(|ui| {
+                        if ui.add_sized(egui::vec2(btn_w * 2.0 + spacing, btn_h), egui::Button::new("0")).clicked() { self.input_digit("0"); }
+                        if ui.add_sized(btn_size, egui::Button::new(".")).clicked() { 
+                            if !self.display.contains('.') {
+                                if self.new_input {
+                                    self.display = "0".to_string();
+                                    self.new_input = false;
+                                }
+                                self.input_digit("."); 
+                            }
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new("=")).clicked() { 
+                            self.calculate();
+                            self.current_op = None;
+                            self.new_input = true;
+                        }
+                    });
+                });
         });
     }
 }
@@ -151,8 +180,9 @@ impl eframe::App for Calculator {
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([260.0, 420.0])
-            .with_resizable(false),
+            .with_inner_size([300.0, 480.0])
+            .with_min_inner_size([200.0, 300.0])
+            .with_resizable(true), // Diatur true agar responsif
         ..Default::default()
     };
     eframe::run_native(
