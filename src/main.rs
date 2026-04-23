@@ -148,5 +148,16 @@ impl eframe::App for Calculator {
     }
 }
 
-fn main() {
+fn main() -> eframe::Result<()> {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([260.0, 420.0])
+            .with_resizable(false),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Kalkulator",
+        options,
+        Box::new(|_cc| Box::new(Calculator::default())),
+    )
 }
