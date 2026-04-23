@@ -69,5 +69,84 @@ impl Calculator {
     }
 }
 
+impl eframe::App for Calculator {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.set_visuals(egui::Visuals::dark());
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            // Style the text
+            ui.style_mut().text_styles.insert(
+                egui::TextStyle::Heading,
+                egui::FontId::proportional(32.0),
+            );
+            ui.style_mut().text_styles.insert(
+                egui::TextStyle::Button,
+                egui::FontId::proportional(24.0),
+            );
+
+            // Display
+            ui.vertical_centered_justified(|ui| {
+                ui.add_space(10.0);
+                ui.heading(&self.display);
+                ui.add_space(10.0);
+                ui.separator();
+                ui.add_space(5.0);
+            });
+
+            // Layout Buttons
+            let button_size = egui::vec2(50.0, 50.0);
+
+            egui::Grid::new("calc_grid").spacing([10.0, 10.0]).show(ui, |ui| {
+                // Row 1
+                if ui.add_sized(button_size, egui::Button::new("7")).clicked() { self.input_digit("7"); }
+                if ui.add_sized(button_size, egui::Button::new("8")).clicked() { self.input_digit("8"); }
+                if ui.add_sized(button_size, egui::Button::new("9")).clicked() { self.input_digit("9"); }
+                if ui.add_sized(button_size, egui::Button::new("/")).clicked() { self.apply_op(Op::Div); }
+                ui.end_row();
+
+                // Row 2
+                if ui.add_sized(button_size, egui::Button::new("4")).clicked() { self.input_digit("4"); }
+                if ui.add_sized(button_size, egui::Button::new("5")).clicked() { self.input_digit("5"); }
+                if ui.add_sized(button_size, egui::Button::new("6")).clicked() { self.input_digit("6"); }
+                if ui.add_sized(button_size, egui::Button::new("*")).clicked() { self.apply_op(Op::Mul); }
+                ui.end_row();
+
+                // Row 3
+                if ui.add_sized(button_size, egui::Button::new("1")).clicked() { self.input_digit("1"); }
+                if ui.add_sized(button_size, egui::Button::new("2")).clicked() { self.input_digit("2"); }
+                if ui.add_sized(button_size, egui::Button::new("3")).clicked() { self.input_digit("3"); }
+                if ui.add_sized(button_size, egui::Button::new("-")).clicked() { self.apply_op(Op::Sub); }
+                ui.end_row();
+
+                // Row 4
+                if ui.add_sized(button_size, egui::Button::new("C")).clicked() { *self = Default::default(); }
+                if ui.add_sized(button_size, egui::Button::new("0")).clicked() { self.input_digit("0"); }
+                if ui.add_sized(button_size, egui::Button::new(".")).clicked() {
+                    if !self.display.contains('.') {
+                        if self.new_input {
+                            self.display = "0".to_string();
+                            self.new_input = false;
+                        }
+                        self.input_digit(".");
+                    }
+                }
+                if ui.add_sized(button_size, egui::Button::new("+")).clicked() { self.apply_op(Op::Add); }
+                ui.end_row();
+            });
+
+            ui.add_space(10.0);
+
+            // Put Equal button spanning 200 units width and 50 units height
+            ui.vertical_centered_justified(|ui| {
+                if ui.add_sized(egui::vec2(230.0, 50.0), egui::Button::new("=")).clicked() {
+                    self.calculate();
+                    self.current_op = None;
+                    self.new_input = true;
+                }
+            });
+        });
+    }
+}
+
 fn main() {
 }
