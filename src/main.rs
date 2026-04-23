@@ -82,16 +82,23 @@ impl Calculator {
         unsafe {
             use std::os::windows::ffi::OsStrExt;
             use windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW;
-            use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
+            use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DwmEnableBlurBehindWindow, DWM_BLURBEHIND, DWM_BB_ENABLE};
             
             let title: Vec<u16> = std::ffi::OsStr::new("Kalkulator").encode_wide().chain(std::iter::once(0)).collect();
             let hwnd = FindWindowW(std::ptr::null(), title.as_ptr());
             if hwnd != 0 {
+                // Konfigurasi Blur lawas (Windows 10 / standard BlurBehind)
+                let mut bb: DWM_BLURBEHIND = std::mem::zeroed();
+                bb.dwFlags = DWM_BB_ENABLE;
+                bb.fEnable = if self.theme == Theme::Blur { 1 } else { 0 };
+                DwmEnableBlurBehindWindow(hwnd, &bb);
+
+                // Konfigurasi Backdrop modern (Windows 11)
                 let backdrop_type: i32 = match self.theme {
                     Theme::Default => 1, // DWMSBT_NONE
                     Theme::Acrylic => 3, // DWMSBT_TRANSIENTWINDOW (Acrylic)
-                    Theme::Blur => 2,    // DWMSBT_MAINWINDOW (Mica/Blur)
-                    Theme::FullTransparent => 1, // None, we will rely purely on alpha channel
+                    Theme::Blur => 1,    // DWMSBT_NONE (Karena sudah pakai DwmEnableBlurBehindWindow)
+                    Theme::FullTransparent => 1, // DWMSBT_NONE
                 };
                 
                 DwmSetWindowAttribute(
@@ -113,12 +120,17 @@ impl eframe::App for Calculator {
         match self.theme {
             Theme::Default => {
                 visuals.panel_fill = egui::Color32::from_rgb(30, 30, 30);
+                visuals.window_fill = egui::Color32::from_rgb(30, 30, 30);
             }
             Theme::Acrylic | Theme::Blur => {
-                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(0, 0, 0, 50);
+                // Gunakan transparansi penuh (0 opacity) agar efek Windows terlihat jelas
+                // Jika butuh sedikit gelap, bisa pakai (0, 0, 0, 10). Tapi 0 adalah paling transparan.
+                visuals.panel_fill = egui::Color32::TRANSPARENT;
+                visuals.window_fill = egui::Color32::TRANSPARENT;
             }
             Theme::FullTransparent => {
-                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(0, 0, 0, 0);
+                visuals.panel_fill = egui::Color32::TRANSPARENT;
+                visuals.window_fill = egui::Color32::TRANSPARENT;
             }
         }
         ctx.set_visuals(visuals);
