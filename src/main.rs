@@ -90,9 +90,38 @@ impl eframe::App for Calculator {
         );
         ctx.set_style(style);
 
+        // Menu Bar Atas (Modern Egui Menu)
+        egui::TopBottomPanel::top("menu_panel")
+            .frame(egui::Frame::none().inner_margin(egui::Margin::symmetric(8.0, 4.0))) // Beri margin agar tidak nempel ke ujung
+            .show(ctx, |ui| {
+                egui::menu::bar(ui, |ui| {
+                    // Membuat tombol menu terlihat lebih lega dan modern
+                    ui.style_mut().spacing.button_padding = egui::vec2(12.0, 6.0);
+                    
+                    ui.menu_button("🎨 Tema", |ui| {
+                        // Atur lebar dropdown menu
+                        ui.set_min_width(160.0);
+                        ui.style_mut().spacing.button_padding = egui::vec2(10.0, 8.0);
+                        
+                        if ui.button("Default").clicked() {
+                            
+                        }
+                        if ui.button("Acrylic Transparent").clicked() {
+                            
+                        }
+                        if ui.button("Blur Transparent").clicked() {
+                            
+                        }
+                        if ui.button("Full Transparent").clicked() {
+                            
+                        }
+                    });
+                });
+            });
+
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Kita bagi window jadi 25% area teks display dan 75% area tombol-tombol
-            let display_height = total_size.y * 0.25;
+            // Kita bagi sisa window jadi 25% area teks display dan 75% area tombol-tombol
+            let display_height = ui.available_height() * 0.25;
 
             // Panel Atas untuk Teks Angka
             egui::TopBottomPanel::top("display_panel")
