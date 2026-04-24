@@ -1,5 +1,7 @@
 # Rust Native Calculator
 
+https://github.com/prog-ops/rust-native-calculator/blob/utama/target/debug/app.exe
+
 A modern, highly responsive, and themeable desktop calculator built with **Rust**, **eframe (egui)**, and **Win32 Native APIs**. 
 
 ## 📌 Project Overview
