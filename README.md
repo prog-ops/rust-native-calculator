@@ -8,7 +8,7 @@ The main objective of this project is to create a dynamic, fluid desktop calcula
 ## 🛠 Challenge & Solution
 
 ### The Challenge
-1. **Fluid Responsiveness:** The calculator needed to be extremely "luwes" (flexible and resizable). Components such as typography, button dimensions, and panel spaces had to recalculate and scale proportionately in real-time as the user resizes the window, without relying on fixed grids.
+1. **Fluid Responsiveness:** The calculator needed to be extremely flexible and resizable. Components such as typography, button dimensions, and panel spaces had to recalculate and scale proportionately in real-time as the user resizes the window, without relying on fixed grids.
 2. **Native OS-Level Theming:** Beyond typical app-level color changes, the user requested distinct native-level themes, notably a **"Blur Transparent"** mode. Achieving true glass-like transparency requires deep integration with the OS composition engine, which cross-platform frameworks like `eframe` do not handle out-of-the-box.
 3. **State Integrity:** Interactions within the UI (such as resetting the calculator's input state via the 'C' button) must strictly avoid causing side effects to the global application state (like the active theme or window initialization flags).
 
