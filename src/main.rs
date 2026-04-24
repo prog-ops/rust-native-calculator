@@ -13,9 +13,8 @@ enum Op {
 #[derive(Clone, Copy, PartialEq)]
 enum Theme {
     Default,
-    Acrylic,
     Blur,
-    FullTransparent,
+    Dark,
 }
 
 struct Calculator {
@@ -24,6 +23,7 @@ struct Calculator {
     current_op: Option<Op>,
     new_input: bool,
     theme: Theme,
+    initialized: bool,
 }
 
 impl Default for Calculator {
@@ -34,6 +34,7 @@ impl Default for Calculator {
             current_op: None,
             new_input: true,
             theme: Theme::Default,
+            initialized: false,
         }
     }
 }
@@ -44,12 +45,19 @@ impl Calculator {
             self.display = String::new();
             self.new_input = false;
         }
-        
+
         if self.display == "0" && digit != "." {
             self.display = digit.to_owned();
         } else {
             self.display.push_str(digit);
         }
+    }
+
+    fn reset(&mut self) {
+        self.display = "0".to_owned();
+        self.previous_value = None;
+        self.current_op = None;
+        self.new_input = true;
     }
 
     fn calculate(&mut self) {
@@ -59,7 +67,13 @@ impl Calculator {
                     Op::Add => prev + current,
                     Op::Sub => prev - current,
                     Op::Mul => prev * current,
-                    Op::Div => if current != 0.0 { prev / current } else { f64::NAN },
+                    Op::Div => {
+                        if current != 0.0 {
+                            prev / current
+                        } else {
+                            f64::NAN
+                        }
+                    }
                 };
                 self.display = res.to_string();
                 self.previous_value = Some(res); // allow chaining equals or further ops
@@ -81,10 +95,15 @@ impl Calculator {
     fn apply_theme_to_window(&self) {
         unsafe {
             use std::os::windows::ffi::OsStrExt;
+            use windows_sys::Win32::Graphics::Dwm::{
+                DwmEnableBlurBehindWindow, DwmSetWindowAttribute, DWM_BB_ENABLE, DWM_BLURBEHIND,
+            };
             use windows_sys::Win32::UI::WindowsAndMessaging::FindWindowW;
-            use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DwmEnableBlurBehindWindow, DWM_BLURBEHIND, DWM_BB_ENABLE};
-            
-            let title: Vec<u16> = std::ffi::OsStr::new("Kalkulator").encode_wide().chain(std::iter::once(0)).collect();
+
+            let title: Vec<u16> = std::ffi::OsStr::new("Kalkulator")
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
             let hwnd = FindWindowW(std::ptr::null(), title.as_ptr());
             if hwnd != 0 {
                 // Konfigurasi Blur lawas (Windows 10 / standard BlurBehind)
@@ -95,12 +114,11 @@ impl Calculator {
 
                 // Konfigurasi Backdrop modern (Windows 11)
                 let backdrop_type: i32 = match self.theme {
-                    Theme::Default => 1, // DWMSBT_NONE
-                    Theme::Acrylic => 3, // DWMSBT_TRANSIENTWINDOW (Acrylic)
-                    Theme::Blur => 1,    // DWMSBT_NONE (Karena sudah pakai DwmEnableBlurBehindWindow)
-                    Theme::FullTransparent => 1, // DWMSBT_NONE
+                    Theme::Default => 1,         // DWMSBT_NONE
+                    Theme::Blur => 1, // DWMSBT_NONE (Karena sudah pakai DwmEnableBlurBehindWindow)
+                    Theme::Dark => 1, // DWMSBT_NONE
                 };
-                
+
                 DwmSetWindowAttribute(
                     hwnd,
                     38, // DWMWA_SYSTEMBACKDROP_TYPE
@@ -113,30 +131,40 @@ impl Calculator {
 }
 
 impl eframe::App for Calculator {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        match self.theme {
+            Theme::Dark => [0.0, 0.0, 0.0, 0.0], // benar-benar kosong
+            Theme::Blur => [0.0, 0.0, 0.0, 0.0],            // biar DWM blur tembus
+            Theme::Default => [0.118, 0.118, 0.118, 1.0],   // rgb(30,30,30)
+        }
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if !self.initialized {
+            self.apply_theme_to_window();
+            self.initialized = true;
+        }
+
         let mut visuals = egui::Visuals::dark();
-        
+
         // Sesuaikan transparansi background aplikasi eframe
         match self.theme {
             Theme::Default => {
                 visuals.panel_fill = egui::Color32::from_rgb(30, 30, 30);
                 visuals.window_fill = egui::Color32::from_rgb(30, 30, 30);
             }
-            Theme::Acrylic | Theme::Blur => {
-                // Gunakan transparansi penuh (0 opacity) agar efek Windows terlihat jelas
-                // Jika butuh sedikit gelap, bisa pakai (0, 0, 0, 10). Tapi 0 adalah paling transparan.
+            Theme::Blur => {
                 visuals.panel_fill = egui::Color32::TRANSPARENT;
                 visuals.window_fill = egui::Color32::TRANSPARENT;
             }
-            Theme::FullTransparent => {
-                visuals.panel_fill = egui::Color32::TRANSPARENT;
-                visuals.window_fill = egui::Color32::TRANSPARENT;
+            Theme::Dark => {
+                visuals.panel_fill = egui::Color32::from_rgba_premultiplied(0, 0, 0, 0);
             }
         }
         ctx.set_visuals(visuals);
 
         let total_size = ctx.screen_rect().size();
-        
+
         // Menghitung proporsi font responsif
         let display_font_size = (total_size.y * 0.08).clamp(24.0, 100.0);
         let button_font_size = (total_size.y * 0.05).clamp(16.0, 60.0);
@@ -159,26 +187,22 @@ impl eframe::App for Calculator {
                 egui::menu::bar(ui, |ui| {
                     // Membuat tombol menu terlihat lebih lega dan modern
                     ui.style_mut().spacing.button_padding = egui::vec2(12.0, 6.0);
-                    
-                    ui.menu_button("🎨 Tema", |ui| {
+
+                    ui.menu_button("🎨", |ui| {
                         // Atur lebar dropdown menu
                         ui.set_min_width(160.0);
                         ui.style_mut().spacing.button_padding = egui::vec2(10.0, 8.0);
-                        
+
                         if ui.button("Default").clicked() {
                             self.theme = Theme::Default;
-                            self.apply_theme_to_window();
-                        }
-                        if ui.button("Acrylic Transparent").clicked() {
-                            self.theme = Theme::Acrylic;
                             self.apply_theme_to_window();
                         }
                         if ui.button("Blur Transparent").clicked() {
                             self.theme = Theme::Blur;
                             self.apply_theme_to_window();
                         }
-                        if ui.button("Full Transparent").clicked() {
-                            self.theme = Theme::FullTransparent;
+                        if ui.button("Dark").clicked() {
+                            self.theme = Theme::Dark;
                             self.apply_theme_to_window();
                         }
                     });
@@ -219,49 +243,89 @@ impl eframe::App for Calculator {
 
                     // Baris 1
                     ui.horizontal(|ui| {
-                        if ui.add_sized(egui::vec2(btn_w * 3.0 + spacing * 2.0, btn_h), egui::Button::new("C")).clicked() { 
-                            *self = Default::default(); 
+                        if ui
+                            .add_sized(
+                                egui::vec2(btn_w * 3.0 + spacing * 2.0, btn_h),
+                                egui::Button::new("C"),
+                            )
+                            .clicked()
+                        {
+                            self.reset();
                         }
-                        if ui.add_sized(btn_size, egui::Button::new("/")).clicked() { self.apply_op(Op::Div); }
+                        if ui.add_sized(btn_size, egui::Button::new("/")).clicked() {
+                            self.apply_op(Op::Div);
+                        }
                     });
 
                     // Baris 2
                     ui.horizontal(|ui| {
-                        if ui.add_sized(btn_size, egui::Button::new("7")).clicked() { self.input_digit("7"); }
-                        if ui.add_sized(btn_size, egui::Button::new("8")).clicked() { self.input_digit("8"); }
-                        if ui.add_sized(btn_size, egui::Button::new("9")).clicked() { self.input_digit("9"); }
-                        if ui.add_sized(btn_size, egui::Button::new("*")).clicked() { self.apply_op(Op::Mul); }
+                        if ui.add_sized(btn_size, egui::Button::new("7")).clicked() {
+                            self.input_digit("7");
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new("8")).clicked() {
+                            self.input_digit("8");
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new("9")).clicked() {
+                            self.input_digit("9");
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new("*")).clicked() {
+                            self.apply_op(Op::Mul);
+                        }
                     });
 
                     // Baris 3
                     ui.horizontal(|ui| {
-                        if ui.add_sized(btn_size, egui::Button::new("4")).clicked() { self.input_digit("4"); }
-                        if ui.add_sized(btn_size, egui::Button::new("5")).clicked() { self.input_digit("5"); }
-                        if ui.add_sized(btn_size, egui::Button::new("6")).clicked() { self.input_digit("6"); }
-                        if ui.add_sized(btn_size, egui::Button::new("-")).clicked() { self.apply_op(Op::Sub); }
+                        if ui.add_sized(btn_size, egui::Button::new("4")).clicked() {
+                            self.input_digit("4");
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new("5")).clicked() {
+                            self.input_digit("5");
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new("6")).clicked() {
+                            self.input_digit("6");
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new("-")).clicked() {
+                            self.apply_op(Op::Sub);
+                        }
                     });
 
                     // Baris 4
                     ui.horizontal(|ui| {
-                        if ui.add_sized(btn_size, egui::Button::new("1")).clicked() { self.input_digit("1"); }
-                        if ui.add_sized(btn_size, egui::Button::new("2")).clicked() { self.input_digit("2"); }
-                        if ui.add_sized(btn_size, egui::Button::new("3")).clicked() { self.input_digit("3"); }
-                        if ui.add_sized(btn_size, egui::Button::new("+")).clicked() { self.apply_op(Op::Add); }
+                        if ui.add_sized(btn_size, egui::Button::new("1")).clicked() {
+                            self.input_digit("1");
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new("2")).clicked() {
+                            self.input_digit("2");
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new("3")).clicked() {
+                            self.input_digit("3");
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new("+")).clicked() {
+                            self.apply_op(Op::Add);
+                        }
                     });
 
                     // Baris 5
                     ui.horizontal(|ui| {
-                        if ui.add_sized(egui::vec2(btn_w * 2.0 + spacing, btn_h), egui::Button::new("0")).clicked() { self.input_digit("0"); }
-                        if ui.add_sized(btn_size, egui::Button::new(".")).clicked() { 
+                        if ui
+                            .add_sized(
+                                egui::vec2(btn_w * 2.0 + spacing, btn_h),
+                                egui::Button::new("0"),
+                            )
+                            .clicked()
+                        {
+                            self.input_digit("0");
+                        }
+                        if ui.add_sized(btn_size, egui::Button::new(".")).clicked() {
                             if !self.display.contains('.') {
                                 if self.new_input {
                                     self.display = "0".to_string();
                                     self.new_input = false;
                                 }
-                                self.input_digit("."); 
+                                self.input_digit(".");
                             }
                         }
-                        if ui.add_sized(btn_size, egui::Button::new("=")).clicked() { 
+                        if ui.add_sized(btn_size, egui::Button::new("=")).clicked() {
                             self.calculate();
                             self.current_op = None;
                             self.new_input = true;
