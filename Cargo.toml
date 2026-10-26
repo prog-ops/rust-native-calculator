@@ -2,7 +2,71 @@
 name = "window-frame"
 version = "0.1.0"
 edition = "2021"
+# Lowest toolchain this crate is verified against (see README "Toolchain").
+rust-version = "1.95"
+description = "A responsive, themeable desktop calculator built with eframe/egui (Windows, macOS, Linux)"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/prog-ops/rust-native-calculator"
+publish = false
 
 [dependencies]
-eframe = "0.27.0"
-windows-sys = { version = "0.52.0", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }
+# Explicit feature set instead of eframe's defaults:
+#  * `glow`   - the OpenGL renderer. eframe's default is now wgpu, which cannot
+#               provide the transparent window the "Blur Transparent" theme needs on
+#               Windows and pulls in a large DX12/Vulkan/Metal stack.
+#  * no `clipboard` / `wayland` - the calculator has no text input, and both
+#               features reference `arboard` -> `clipboard-win`, whose 5.3+/5.4
+#               releases are yanked; Cargo includes even weak (`dep?/feat`)
+#               references in lockfile resolution, so either feature breaks a fresh
+#               `cargo generate-lockfile`. Linux Wayland support comes from the
+#               target-specific winit/glutin features below instead.
+#  * no `wgpu`, `links`, `system_fonts`, `web_screen_reader` - unused here.
+eframe = { version = "0.37.0", default-features = false, features = ["accesskit", "default_fonts", "glow", "x11"] }
+# Same egui eframe re-exports; only here to enable the bundled monochrome emoji
+# fonts (the theme-menu icon). Since egui 0.37 they are opt-in: the default
+# expects `system_fonts`, which we leave off for identical rendering everywhere.
+egui = { version = "0.37.0", default-features = false, features = ["monochrome_emoji_fonts"] }
+
+# Linux only: Wayland support without eframe's `wayland` feature (see above).
+# Same versions eframe 0.37 uses, so Cargo unifies them with eframe's own copies.
+#  * winit `wayland-dlopen`: load libwayland at runtime instead of linking it
+#    (no libwayland-dev needed to build); `wayland-csd-adwaita`: window decorations.
+#  * glutin / glutin-winit `wayland`: let the OpenGL renderer create surfaces on Wayland.
+[target.'cfg(target_os = "linux")'.dependencies]
+winit = { version = "0.30.13", default-features = false, features = ["wayland", "wayland-dlopen", "wayland-csd-adwaita", "x11"] }
+glutin = { version = "0.32.3", default-features = false, features = ["wayland", "x11", "egl", "glx"] }
+glutin-winit = { version = "0.5.0", default-features = false, features = ["wayland", "x11", "egl", "glx"] }
+
+# Win32 / DWM integration is only compiled for Windows targets.
+# On macOS and Linux these crates are not even downloaded or built.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Graphics_Dwm", "Win32_Foundation", "Win32_Graphics_Gdi"] }
+# Same major version eframe uses, so `eframe::Frame: HasWindowHandle` is usable directly.
+raw-window-handle = "0.6.2"
+
+# ---------------------------------------------------------------------------
+# Lints: enforced by `cargo clippy` (RustRover's external linter) and CI.
+# ---------------------------------------------------------------------------
+[lints.rust]
+rust_2018_idioms = "warn"
+unsafe_op_in_unsafe_fn = "warn"
+
+[lints.clippy]
+# Every `unsafe { }` block must carry a `// SAFETY:` comment (FFI code lives here).
+undocumented_unsafe_blocks = "warn"
+
+# ---------------------------------------------------------------------------
+# Build profiles
+# ---------------------------------------------------------------------------
+# Immediate-mode GUIs re-render every frame; un-optimised egui/winit/glow make
+# the debug build visibly sluggish. Optimise *dependencies only*, so our own
+# code keeps full debug info and fast incremental rebuilds.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

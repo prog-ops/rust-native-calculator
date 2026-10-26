@@ -1,0 +1,5 @@
+# Only stable rustfmt options are used, so `cargo fmt` works on the stable toolchain.
+edition = "2021"
+# Always write LF, even on Windows, so diffs never flip line endings between
+# macOS and Windows contributors (paired with .gitattributes / .editorconfig).
+newline_style = "Unix"

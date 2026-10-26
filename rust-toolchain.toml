@@ -1,0 +1,6 @@
+# Picked up automatically by rustup (and therefore by RustRover and `cargo`).
+# Guarantees every contributor gets the same channel *and* the components the
+# project relies on (clippy for lints, rustfmt for formatting) without manual setup.
+[toolchain]
+channel = "stable"
+components = ["clippy", "rustfmt"]
