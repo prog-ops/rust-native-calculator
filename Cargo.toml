@@ -45,6 +45,14 @@ windows-sys = { version = "0.61.2", features = ["Win32_Graphics_Dwm", "Win32_Fou
 # Same major version eframe uses, so `eframe::Frame: HasWindowHandle` is usable directly.
 raw-window-handle = "0.6.2"
 
+# macOS / AppKit integration: NSVisualEffectView for the "Blur Transparent" theme.
+# Same objc2 versions eframe 0.37 (winit 0.30) pulls in, so Cargo unifies them.
+[target.'cfg(target_os = "macos")'.dependencies]
+raw-window-handle = "0.6.2"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSGeometry", "NSThread"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSColor", "NSResponder", "NSView", "NSVisualEffectView", "NSWindow"] }
+
 # ---------------------------------------------------------------------------
 # Lints: enforced by `cargo clippy` (RustRover's external linter) and CI.
 # ---------------------------------------------------------------------------

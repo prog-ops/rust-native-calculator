@@ -195,9 +195,73 @@ impl Calculator {
         }
     }
 
-    /// Non-Windows platforms have no DWM; the theme is fully handled by egui
-    /// visuals + the transparent `clear_color`, so there is nothing to do here.
-    #[cfg(not(windows))]
+    /// macOS: use native window-server blur (`CGSSetWindowBackgroundBlurRadius`)
+    /// to replicate the frosted-glass look that Windows achieves through DWM `BlurBehind`.
+    ///
+    /// This operates directly at the window compositor level behind the OpenGL surface,
+    /// leaving all egui UI elements, buttons, and text completely visible and clickable
+    /// without obstructing subviews.
+    #[cfg(target_os = "macos")]
+    fn apply_theme_to_window(&self, frame: &eframe::Frame) {
+        use objc2::rc::Retained;
+        use objc2_app_kit::{NSColor, NSView};
+        use objc2_foundation::NSInteger;
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGSMainConnectionID() -> *mut std::ffi::c_void;
+            fn CGSSetWindowBackgroundBlurRadius(
+                connection_id: *mut std::ffi::c_void,
+                window_id: NSInteger,
+                radius: i64,
+            ) -> i32;
+        }
+
+        let Ok(handle) = frame.window_handle() else {
+            return;
+        };
+        let RawWindowHandle::AppKit(appkit) = handle.as_raw() else {
+            return;
+        };
+
+        // SAFETY: `ns_view` is the live NSView owned by winit/eframe for the duration of this call.
+        let ns_view: Retained<NSView> =
+            unsafe { Retained::retain(appkit.ns_view.as_ptr().cast()) }.expect("non-null NSView");
+
+        let Some(ns_window) = ns_view.window() else {
+            return;
+        };
+
+        let window_number = ns_window.windowNumber();
+
+        if self.theme == Theme::Blur {
+            ns_window.setOpaque(false);
+            let clear = NSColor::clearColor();
+            ns_window.setBackgroundColor(Some(&clear));
+            // SAFETY: CGSSetWindowBackgroundBlurRadius is the standard macOS compositor API
+            // used by winit and Terminal.app to apply frosted-glass blur behind the window.
+            unsafe {
+                let conn = CGSMainConnectionID();
+                CGSSetWindowBackgroundBlurRadius(conn, window_number, 64);
+            }
+            ns_window.invalidateShadow();
+        } else {
+            // Non-blur themes: clear blur and restore opaque background.
+            // SAFETY: Setting blur radius to 0 disables background blurring.
+            unsafe {
+                let conn = CGSMainConnectionID();
+                CGSSetWindowBackgroundBlurRadius(conn, window_number, 0);
+            }
+            ns_window.setOpaque(true);
+            ns_window.setBackgroundColor(None);
+            ns_window.invalidateShadow();
+        }
+    }
+
+    /// Linux has no standard window-compositor blur API.
+    /// The theme is handled purely by egui visuals + `clear_color`.
+    #[cfg(not(any(windows, target_os = "macos")))]
     fn apply_theme_to_window(&self, _frame: &eframe::Frame) {}
 }
 
@@ -220,10 +284,11 @@ impl eframe::App for Calculator {
             }
             Theme::Blur => {
                 visuals.panel_fill = egui::Color32::TRANSPARENT;
-                visuals.window_fill = egui::Color32::TRANSPARENT;
+                visuals.window_fill = egui::Color32::from_rgba_premultiplied(30, 30, 30, 240);
             }
             Theme::Dark => {
                 visuals.panel_fill = egui::Color32::BLACK;
+                visuals.window_fill = egui::Color32::from_rgb(20, 20, 20);
             }
         }
 
